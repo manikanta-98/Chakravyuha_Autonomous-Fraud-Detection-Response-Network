@@ -1,0 +1,378 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: fraud-detection
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:10.2.0
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: admin-password
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel,grafana-worldmap-panel"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-datasources
+          mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboards
+          mountPath: /etc/grafana/provisioning/dashboards
+        - name: grafana-dashboard-files
+          mountPath: /var/lib/grafana/dashboards
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: grafana-storage
+        persistentVolumeClaim:
+          claimName: grafana-pvc
+      - name: grafana-datasources
+        configMap:
+          name: grafana-datasources
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: grafana-dashboard-files
+        configMap:
+          name: grafana-dashboard-files
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: fraud-detection
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  type: ClusterIP
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: fraud-detection
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: true
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: fraud-detection
+data:
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: 'fraud-detection'
+        orgId: 1
+        folder: ''
+        type: file
+        disableDeletion: false
+        updateIntervalSeconds: 10
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-files
+  namespace: fraud-detection
+data:
+  fraud-detection-overview.json: |
+    {
+      "dashboard": {
+        "id": null,
+        "title": "Fraud Detection System Overview",
+        "tags": ["fraud-detection", "production"],
+        "timezone": "UTC",
+        "panels": [
+          {
+            "id": 1,
+            "title": "System Health",
+            "type": "stat",
+            "targets": [
+              {
+                "expr": "up{job=~\"fraud-detection-api|fraud-detection-worker|redis|postgres|kafka\"}",
+                "legendFormat": "{{job}}"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "mappings": [
+                  {
+                    "options": {
+                      "0": {
+                        "text": "DOWN",
+                        "color": "red"
+                      },
+                      "1": {
+                        "text": "UP",
+                        "color": "green"
+                      }
+                    },
+                    "type": "value"
+                  }
+                ]
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            }
+          },
+          {
+            "id": 2,
+            "title": "API Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, rate(fraud_detection_api_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "95th percentile latency"
+              },
+              {
+                "expr": "histogram_quantile(0.50, rate(fraud_detection_api_request_duration_seconds_bucket[5m]))",
+                "legendFormat": "50th percentile latency"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "seconds",
+                "min": 0
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            }
+          },
+          {
+            "id": 3,
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(fraud_detection_api_requests_total[5m])",
+                "legendFormat": "Total requests/sec"
+              },
+              {
+                "expr": "rate(fraud_detection_api_requests_total{status=~\"2..\"}[5m])",
+                "legendFormat": "Success requests/sec"
+              },
+              {
+                "expr": "rate(fraud_detection_api_requests_total{status=~\"4..|5..\"}[5m])",
+                "legendFormat": "Error requests/sec"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 8
+            }
+          },
+          {
+            "id": 4,
+            "title": "Agent Performance",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "fraud_detection_agent_queue_length",
+                "legendFormat": "{{agent}} queue length"
+              },
+              {
+                "expr": "rate(fraud_detection_agent_processed_total[5m])",
+                "legendFormat": "{{agent}} processed/sec"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 8
+            }
+          },
+          {
+            "id": 5,
+            "title": "Model Metrics",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "fraud_detection_model_accuracy",
+                "legendFormat": "Model accuracy"
+              },
+              {
+                "expr": "rate(fraud_detection_false_positives_total[5m]) / rate(fraud_detection_total_predictions_total[5m])",
+                "legendFormat": "False positive rate"
+              },
+              {
+                "expr": "rate(fraud_detection_false_negatives_total[5m]) / rate(fraud_detection_total_predictions_total[5m])",
+                "legendFormat": "False negative rate"
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 0,
+              "y": 16
+            }
+          },
+          {
+            "id": 6,
+            "title": "Resource Usage",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(container_cpu_usage_seconds_total{pod=~\"fraud-detection-.*\"}[5m])",
+                "legendFormat": "{{pod}} CPU usage"
+              },
+              {
+                "expr": "container_memory_usage_bytes{pod=~\"fraud-detection-.*\"}",
+                "legendFormat": "{{pod}} memory usage"
+              }
+            ],
+            "yAxes": [
+              {
+                "unit": "bytes",
+                "min": 0
+              }
+            ],
+            "gridPos": {
+              "h": 8,
+              "w": 12,
+              "x": 12,
+              "y": 16
+            }
+          },
+          {
+            "id": 7,
+            "title": "Fraud Detection Results",
+            "type": "table",
+            "targets": [
+              {
+                "expr": "rate(fraud_detection_fraud_detected_total[1h])",
+                "legendFormat": "Fraud detected/hour"
+              },
+              {
+                "expr": "rate(fraud_detection_legitimate_total[1h])",
+                "legendFormat": "Legitimate transactions/hour"
+              },
+              {
+                "expr": "rate(fraud_detection_total_predictions_total[1h])",
+                "legendFormat": "Total predictions/hour"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "custom": {
+                  "align": "center"
+                }
+              }
+            },
+            "gridPos": {
+              "h": 8,
+              "w": 24,
+              "x": 0,
+              "y": 24
+            }
+          }
+        ],
+        "time": {
+          "from": "now-1h",
+          "to": "now"
+        },
+        "timepicker": {},
+        "templating": {
+          "list": []
+        },
+        "annotations": {
+          "list": []
+        },
+        "refresh": "30s",
+        "schemaVersion": 27,
+        "version": 0,
+        "links": []
+      }
+    }
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: fraud-detection
+type: Opaque
+data:
+  admin-password: YWRtaW4=  # base64 encoded "admin"
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: grafana-pvc
+  namespace: fraud-detection
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

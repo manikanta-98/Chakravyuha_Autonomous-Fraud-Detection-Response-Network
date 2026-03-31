@@ -1,0 +1,122 @@
+groups:
+  - name: fraud_detection_alerts
+    rules:
+      - alert: HighFraudDetectionLatency
+        expr: histogram_quantile(0.95, rate(fraud_detection_api_request_duration_seconds_bucket[5m])) > 0.3
+        for: 5m
+        labels:
+          severity: critical
+          service: fraud-detection
+        annotations:
+          summary: "High fraud detection latency (95th percentile > 300ms)"
+          description: "Fraud detection latency is {{ $value }}s, which is above the 300ms target"
+
+      - alert: FraudDetectionAPIHighErrorRate
+        expr: rate(fraud_detection_api_requests_total{status=~"5.."}[5m]) / rate(fraud_detection_api_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: fraud-detection
+        annotations:
+          summary: "High error rate in fraud detection API"
+          description: "Error rate is {{ $value | humanizePercentage }}"
+
+      - alert: AgentQueueBacklog
+        expr: fraud_detection_agent_queue_length > 1000
+        for: 2m
+        labels:
+          severity: warning
+          service: fraud-detection
+        annotations:
+          summary: "Agent queue backlog detected"
+          description: "Agent queue length is {{ $value }}, processing may be delayed"
+
+      - alert: ModelAccuracyDrop
+        expr: fraud_detection_model_accuracy < 0.85
+        for: 10m
+        labels:
+          severity: warning
+          service: fraud-detection
+        annotations:
+          summary: "Model accuracy dropped below threshold"
+          description: "Model accuracy is {{ $value | humanizePercentage }}"
+
+      - alert: HighFalsePositiveRate
+        expr: rate(fraud_detection_false_positives_total[1h]) / rate(fraud_detection_total_predictions_total[1h]) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+          service: fraud-detection
+        annotations:
+          summary: "High false positive rate detected"
+          description: "False positive rate is {{ $value | humanizePercentage }}"
+
+      - alert: RedisConnectionIssues
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: redis
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 1 minute"
+
+      - alert: DatabaseConnectionIssues
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: postgres
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 1 minute"
+
+      - alert: KafkaConnectionIssues
+        expr: up{job="kafka"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: kafka
+        annotations:
+          summary: "Kafka is down"
+          description: "Kafka has been down for more than 1 minute"
+
+      - alert: PodRestartRateHigh
+        expr: rate(kube_pod_container_status_restarts_total{namespace="fraud-detection"}[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+        annotations:
+          summary: "High pod restart rate"
+          description: "Pods are restarting at rate {{ $value }}/second"
+
+      - alert: NodeCPUHigh
+        expr: (1 - rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+        annotations:
+          summary: "High CPU usage on node"
+          description: "CPU usage is {{ $value }}%"
+
+      - alert: NodeMemoryHigh
+        expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          service: kubernetes
+        annotations:
+          summary: "High memory usage on node"
+          description: "Memory usage is {{ $value }}%"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+          service: kubernetes
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.device }}"

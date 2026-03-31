@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-detection-api
+  labels:
+    app: fraud-detection
+    component: api
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: fraud-detection
+    component: api
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fraud-detection-frontend
+  labels:
+    app: fraud-detection
+    component: frontend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: fraud-detection
+    component: frontend
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  labels:
+    app: redis
+spec:
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: redis
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  labels:
+    app: postgres
+spec:
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+    name: postgres
+  selector:
+    app: postgres
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-service
+  labels:
+    app: mlflow
+spec:
+  ports:
+  - port: 5000
+    targetPort: 5000
+    protocol: TCP
+    name: mlflow
+  selector:
+    app: mlflow
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  labels:
+    app: kafka
+spec:
+  ports:
+  - port: 9092
+    targetPort: 9092
+    protocol: TCP
+    name: kafka
+  selector:
+    app: kafka

@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    healthcheck:
+      test: ["CMD-SHELL", "echo ruok | nc localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: fraud_detection
+      POSTGRES_USER: fraud_user
+      POSTGRES_PASSWORD: fraud_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fraud_user -d fraud_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  mlflow-server:
+    image: ghcr.io/mlflow/mlflow:v2.8.1
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_TRACKING_URI: http://localhost:5050
+    volumes:
+      - mlflow_data:/mlflow
+    command: mlflow server --host 0.0.0.0 --port 5000
+
+  feast-server:
+    image: feastdev/feature-server:0.34.0
+    ports:
+      - "6566:6566"
+    environment:
+      FEAST_SERVER_REPO_PATH: /feature_repo
+    volumes:
+      - ./backend/core/feature_repo:/feature_repo
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis_data:
+  postgres_data:
+  mlflow_data:

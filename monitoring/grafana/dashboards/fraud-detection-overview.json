@@ -1,0 +1,218 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Fraud Detection System Overview",
+    "tags": ["fraud-detection", "production"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=~\"fraud-detection-api|fraud-detection-worker|redis|postgres|kafka\"}",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {
+                    "text": "DOWN",
+                    "color": "red"
+                  },
+                  "1": {
+                    "text": "UP",
+                    "color": "green"
+                  }
+                },
+                "type": "value"
+              }
+            ]
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 0
+        }
+      },
+      {
+        "id": 2,
+        "title": "API Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(fraud_detection_api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile latency"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(fraud_detection_api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile latency"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "seconds",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 0
+        }
+      },
+      {
+        "id": 3,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(fraud_detection_api_requests_total[5m])",
+            "legendFormat": "Total requests/sec"
+          },
+          {
+            "expr": "rate(fraud_detection_api_requests_total{status=~\"2..\"}[5m])",
+            "legendFormat": "Success requests/sec"
+          },
+          {
+            "expr": "rate(fraud_detection_api_requests_total{status=~\"4..|5..\"}[5m])",
+            "legendFormat": "Error requests/sec"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 8
+        }
+      },
+      {
+        "id": 4,
+        "title": "Agent Performance",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "fraud_detection_agent_queue_length",
+            "legendFormat": "{{agent}} queue length"
+          },
+          {
+            "expr": "rate(fraud_detection_agent_processed_total[5m])",
+            "legendFormat": "{{agent}} processed/sec"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 8
+        }
+      },
+      {
+        "id": 5,
+        "title": "Model Metrics",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "fraud_detection_model_accuracy",
+            "legendFormat": "Model accuracy"
+          },
+          {
+            "expr": "rate(fraud_detection_false_positives_total[5m]) / rate(fraud_detection_total_predictions_total[5m])",
+            "legendFormat": "False positive rate"
+          },
+          {
+            "expr": "rate(fraud_detection_false_negatives_total[5m]) / rate(fraud_detection_total_predictions_total[5m])",
+            "legendFormat": "False negative rate"
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 0,
+          "y": 16
+        }
+      },
+      {
+        "id": 6,
+        "title": "Resource Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(container_cpu_usage_seconds_total{pod=~\"fraud-detection-.*\"}[5m])",
+            "legendFormat": "{{pod}} CPU usage"
+          },
+          {
+            "expr": "container_memory_usage_bytes{pod=~\"fraud-detection-.*\"}",
+            "legendFormat": "{{pod}} memory usage"
+          }
+        ],
+        "yAxes": [
+          {
+            "unit": "bytes",
+            "min": 0
+          }
+        ],
+        "gridPos": {
+          "h": 8,
+          "w": 12,
+          "x": 12,
+          "y": 16
+        }
+      },
+      {
+        "id": 7,
+        "title": "Fraud Detection Results",
+        "type": "table",
+        "targets": [
+          {
+            "expr": "rate(fraud_detection_fraud_detected_total[1h])",
+            "legendFormat": "Fraud detected/hour"
+          },
+          {
+            "expr": "rate(fraud_detection_legitimate_total[1h])",
+            "legendFormat": "Legitimate transactions/hour"
+          },
+          {
+            "expr": "rate(fraud_detection_total_predictions_total[1h])",
+            "legendFormat": "Total predictions/hour"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "align": "center"
+            }
+          }
+        },
+        "gridPos": {
+          "h": 8,
+          "w": 24,
+          "x": 0,
+          "y": 24
+        }
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "timepicker": {},
+    "templating": {
+      "list": []
+    },
+    "annotations": {
+      "list": []
+    },
+    "refresh": "30s",
+    "schemaVersion": 27,
+    "version": 0,
+    "links": []
+  }
+}
