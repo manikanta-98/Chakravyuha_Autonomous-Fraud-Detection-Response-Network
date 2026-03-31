@@ -194,7 +194,7 @@ locust -f tests/load_test.py
 ## 📚 API Documentation
 
 Once running, visit:
--**Dashboard**:http://http://localhost:3002
+-**Dashboard**:http://localhost:3002
 - **API Docs**: http://localhost:8000/docs
 - **Grafana**: http://localhost:3000
 - **MLflow**: http://localhost:5000
